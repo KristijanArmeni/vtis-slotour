@@ -7,7 +7,7 @@ from matplotlib import pyplot as plt
 
 st.title("Pomen Slovencev v tujini za slovenski turizem")
 
-fname = "/users/kriarm/project/slotour/data/slotour_resp.tsv"
+fname = "./data/slotour_resp.tsv"
 
 df = pd.read_csv(fname, sep="\t", header=0)
 
