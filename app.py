@@ -42,7 +42,23 @@ colors = prop_cycle.by_key()['color']
 
 # ===== DATA ===== #
 st.markdown("## Izhodiščni podatki")
+
+st.markdown("Izhodiščni podatki so predstavljeni v spodnji tabeli. ")
+
 df
+
+questions = "\n".join([f"1. {q} (`{k}`)" for q, k in zip(new_cols.keys(), new_cols.values())])
+
+st.markdown(
+    "Stolpci predstavljajo odgovore na naslednja vprašanja: "
+)
+
+st.markdown(f"{questions}")
+
+st.markdown("Kodiranja:")
+st.markdown("`n_rec`: " + " let; ".join([f"{value_map1[key]} = {key}" for key in value_map1.keys()]))
+st.markdown("`n_incoming`: "+" let; ".join([f"{value_map2[key]} = {key}" for key in value_map2.keys()]))
+st.markdown("`years_abroad`: "+" let; ".join([f"{years_abroad_map[key]} = {key}" for key in years_abroad_map.keys()]))
 
 # ===== DEMOGRAPHICS ===== #
 st.markdown("## Leta bivanja v tujini")
@@ -130,8 +146,10 @@ sns.despine()
 
 st.pyplot(fig=fig)
 
+# ===== ŠTEVILO PROMOCIJ ===== #
 st.markdown("## Kako in koliko člani društva VTIS promovirajo Slovenijo?")
 
+st.markdown("### Število priporočil")
 fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(6.5, 4.5))
 
 ax = sns.histplot(df,
@@ -157,5 +175,119 @@ ax.annotate(text=f"N = {len(df)}", xy=[ax.get_xlim()[0]*-0.01, 90], fontsize=12)
 sns.move_legend(ax, loc='upper right', title="")
 plt.tight_layout()
 sns.despine()
+
+st.pyplot(fig=fig)
+
+st.markdown("### Število obiskov")
+
+fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(6.5, 4.5))
+
+sns.histplot(df, 
+             ax=ax,
+             x='n_incoming',
+             hue='ismember',
+             discrete=True,
+             multiple='dodge',
+             shrink=0.9,
+             common_norm=False,
+             legend=True,
+             stat='percent',
+             edgecolor='w')
+
+ax.set(ylabel="% odgovorov",
+       xlabel="št. ljudi")
+ax.set_title(label="Približno koliko ljudi je Slovenijo obiskalo zaradi vašega predloga,\nodkar ste prvič odšli v tujino?",
+             fontsize=14)
+ax.set_xticks(ticks=list(value_map2.values()), labels=value_map2.keys())
+ax.set_ylim([0, 100])
+ax.annotate(text=f"N = {len(df)}", xy=[ax.get_xlim()[0]*-0.01, 90], fontsize=12)
+sns.move_legend(ax, loc='upper right', title="")
+sns.despine()
+
+st.pyplot(fig=fig)
+
+# ===== NAJBOLJ PROMOVIRANE REGIJE ===== #
+st.markdown("## Najbolj promovirane regije")
+regs = ", ".join([a for a in df.regions]).split(", ")
+
+dat = []
+dat = pd.DataFrame(np.array(regs), columns=["regs"])
+df3 = pd.DataFrame(index=range(len(dat.value_counts())), columns=["name", "count"])
+df3['name'] = [a[0] for a in dat.value_counts().index]
+df3['count'] = dat.value_counts().values
+
+fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(6.5, 4.5))
+
+sns.barplot(df3,
+            x="count",
+            y="name",
+            ax=ax,
+            color=colors[0],
+            edgecolor='w')
+
+ax.set(ylabel="",
+       xlabel="št. odgovorov")
+ax.set_title(label="Obisk katerih regij jim najpogosteje predlagate?",
+             fontsize=14)
+
+ax.annotate(text=f"N = {len(df)}", xy=[120, ax.get_ylim()[0]*0.9], fontsize=12)
+sns.despine()
+
+st.pyplot(fig=fig)
+
+# ===== RAZLOGI ZA PROMOCIJO ==== #
+st.markdown("## Razlogi za promocijo")
+
+options = [
+    "Ponosen/-na sem na Slovenijo",
+    "Prepričan/-a sem, da bo tujcem v Sloveniji všeč",
+    "Želim pomagati slovenskemu turizmu",
+    "Samo, če me tujci vprašajo za priporočilo, jim predlagam, kam lahko grejo v Sloveniji",
+    "Ne promoviram potovanj v Slovenijo",
+]
+
+# first find all given options and add a full stop afterwards (instead of comma)
+a = []
+for s in df.why_promote.to_list():
+    for o in options:
+        s = s.replace(o, o + ".")
+    a.append(s)
+
+# now find the fullstop-comma combination and replace with just a comma
+tmp = [e.replace(".,", ".") for e in a]
+
+# now split at fullstop and count
+b = [e.split(".") for e in tmp]
+c = [e.strip() for b2 in b for e in b2]
+c = [e for e in c if e != ""]
+
+df3 = pd.DataFrame(c, columns=["why"]).groupby("why").size().sort_values(ascending=False)
+df3 = pd.DataFrame(df3, columns=["count"])
+df3['why'] = df3.index
+df3 = df3.loc[df3["count"] > 1, :]
+
+# ==== FIGURE
+fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(16, 4))
+
+# FIGURE 
+sns.barplot(df3, 
+            ax=ax,
+            x='count',
+            y='why',
+            color=colors[0],
+            edgecolor='w')
+
+fs=22
+ax.set_title(label="Lahko delite z nami razloge, \n" + \
+                   "zakaj promovirate lepote Slovenije z vašo mrežo v tujini?",
+             fontsize=fs) 
+ax.set_ylabel(ylabel="")
+ax.set_xlabel(xlabel="št. odgovorov", fontsize=fs)
+ylabs = ax.get_yticklabels()
+ylabs[3] = "Predlagam samo, če me vprašajo"
+ax.set_yticklabels(labels=ylabs, rotation=0)
+ax.tick_params(labelsize=22)
+sns.despine()
+plt.tight_layout()
 
 st.pyplot(fig=fig)
