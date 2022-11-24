@@ -65,6 +65,12 @@ st.markdown("## Leta bivanja v tujini")
 
 fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(6.5, 4.5))
 
+# get counts and compute percents and format as text for annotation
+dat = None
+dat = pd.DataFrame(df.groupby("years_abroad").size(), columns=["counts"])
+dat["perc"] = ((dat["counts"]/len(df))*100).round(decimals=1)
+dat["text"] = dat.perc.apply(lambda x: f"{x}%") + dat.counts.apply(lambda x: f" ({x})")
+
 ax = sns.histplot(df,
                   ax=ax,
                   x='years_abroad',
@@ -84,12 +90,14 @@ ax.set_title(label="Koliko let že prebivate ali ste prebivali v tujini?",
              fontsize=14)
 ax.set_ylim([0, 100])
 ax.annotate(text=f"N = {len(df)}", xy=[ax.get_xlim()[0]*-0.01, 90], fontsize=12)
-#sns.move_legend(ax, loc='upper right', title="")
+for i, v in enumerate(dat.text.tolist()):
+    ax.text(x=ax.get_xticks()[i], y=dat.perc[i]+1, s=v, ha="center")
 plt.tight_layout()
 sns.despine()
 
 st.pyplot(fig=fig)
 
+# ===== DRŽAVA BIVANJA ===== #
 st.markdown("## Država bivanja")
 
 a = [e.split(", ") for e in df.countries.to_numpy()]
@@ -150,15 +158,24 @@ st.pyplot(fig=fig)
 st.markdown("## Kako in koliko člani društva VTIS promovirajo Slovenijo?")
 
 st.markdown("### Število priporočil")
-fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(6.5, 4.5))
 
+groups = ["ismember", "n_rec"]
+ismember_count = df.groupby("ismember")["n_rec"].transform("sum")
+dat_count = df.groupby(groups).agg({"n_rec": "count"})
+dat_total = df.groupby("ismember").agg({"n_rec": "count"})
+dat_count['perc'] = (dat_count.div(dat_total, level="ismember")*100).round(decimals=0).astype(int)
+dat_count['text'] = dat_count.perc.apply(lambda x: f"{x}%") + dat_count.n_rec.apply(lambda x: f"\n({x})")
+
+fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(6.5, 4.5))
+shrinkage = 0.9
 ax = sns.histplot(df,
                   ax=ax,
                   x='n_rec',
                   hue='ismember',
                   discrete=True,
                   multiple='dodge',
-                  shrink=0.8,
+                  binwidth=1,
+                  shrink=shrinkage,
                   common_norm=False,
                   legend=True,
                   stat='percent',
@@ -171,6 +188,14 @@ ax.set_title(label="Koliko ljudem ste v zadnjih 12 mesecih predlagali potovanje 
              fontsize=14)
 ax.set_xticks(ticks=list(value_map1.values()), labels=value_map1.keys())
 ax.set_ylim([0, 100])
+
+xloc = np.tile(ax.get_xticks(), 2).astype(float)
+xloc[0:5] = xloc[0:5] + shrinkage/4
+xloc[5::] = xloc[5::] - shrinkage/4
+
+for i, v in enumerate(dat_count.text.tolist()):
+    ax.text(x=xloc[i], y=dat_count.perc[i]+2, s=v, ha="center")
+
 ax.annotate(text=f"N = {len(df)}", xy=[ax.get_xlim()[0]*-0.01, 90], fontsize=12)
 sns.move_legend(ax, loc='upper right', title="")
 plt.tight_layout()
@@ -178,8 +203,26 @@ sns.despine()
 
 st.pyplot(fig=fig)
 
+# ===== 
 st.markdown("### Število obiskov")
 
+# format percents texts for plotting on top of histograms
+groups = ["ismember", "n_incoming"]
+dv = "n_incoming"
+dat_count = df.groupby(groups).agg({dv: "count"})
+
+# add categories that have not occured just for plotting
+dat_count.loc[('Nisem član/-ica', 3), "n_incoming"] = 0
+dat_count.loc[('Nisem član/-ica', 5), "n_incoming"] = 0
+dat_count.n_incoming = dat_count.n_incoming.astype(int)
+dat_count = dat_count.sort_index()
+
+# compute counts and format percentages
+dat_total = df.groupby("ismember").agg({dv: "count"})
+dat_count['perc'] = (dat_count.div(dat_total, level="ismember")*100).round(decimals=0).astype(int)
+dat_count['text'] = dat_count.perc.apply(lambda x: f"{x}%") + dat_count[dv].apply(lambda x: f"\n({x})")
+
+# FIGURE
 fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(6.5, 4.5))
 
 sns.histplot(df, 
@@ -200,6 +243,16 @@ ax.set_title(label="Približno koliko ljudi je Slovenijo obiskalo zaradi vašega
              fontsize=14)
 ax.set_xticks(ticks=list(value_map2.values()), labels=value_map2.keys())
 ax.set_ylim([0, 100])
+
+# set x-axis positions for text annotations
+xloc = dat_count.index.get_level_values("n_incoming").to_numpy().astype(float)
+half=len(dat_count)//2
+xloc[0:half] = xloc[0:half] + shrinkage/4
+xloc[half::] = xloc[half::] - shrinkage/4
+
+for i, v in enumerate(dat_count.text.tolist()):
+    ax.text(x=xloc[i], y=dat_count.perc[i]+2, s=v, ha="center")
+
 ax.annotate(text=f"N = {len(df)}", xy=[ax.get_xlim()[0]*-0.01, 90], fontsize=12)
 sns.move_legend(ax, loc='upper right', title="")
 sns.despine()
