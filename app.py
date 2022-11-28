@@ -234,7 +234,7 @@ sns.barplot(avg, ax=ax, y="wavg", x="country", edgecolor="w", color=colors[0])
 
 ax.set_title("Število obiskov glede na državo bivanja")
 ax.set_xticks(ticks=ax.get_xticks(), labels=ax.get_xticklabels(), rotation=35, ha='right')
-ax.set_ylabel("ševilo obiskov\n(uteženo povprečje)")
+ax.set_ylabel("število obiskov\n(uteženo povprečje)")
 ax.set_xlabel("država/regija")
 
 for i, v in enumerate(avg.wavg.tolist()):
@@ -244,7 +244,7 @@ sns.despine()
 
 st.pyplot(fig=fig)
 
-st.markdown("### Število obiskov glede na čas bivanja")
+# ===== GLEDE NA CAS BIVANJA V TUJINI
 
 tmp3 = get_weigths_values(datlong, iv="years_abroad")
 
@@ -259,7 +259,7 @@ sns.barplot(avg, ax=ax, y="wavg", x="years_abroad", edgecolor="w", color=colors[
 
 ax.set_title("Število obiskov glede čas bivanja v tujini")
 ax.set_xticks(ticks=ax.get_xticks(), labels=years_abroad_map.keys(), rotation=0, ha='center')
-ax.set_ylabel("ševilo obiskov\n(uteženo povprečje)")
+ax.set_ylabel("število obiskov\n(uteženo povprečje)")
 ax.set_xlabel("čas bivanja v tujini")
 
 for i, v in enumerate(avg.wavg.tolist()):
@@ -268,7 +268,6 @@ for i, v in enumerate(avg.wavg.tolist()):
 sns.despine()
 st.pyplot(fig=fig)
 
-st.markdown("### Število obiskov glede na članstvo")
 
 tmp4 = get_weigths_values(datlong, iv="ismember")
 avg = pd.DataFrame(tmp4.groupby("ismember").apply(weighted_average, "estimates", "weight"), columns=["wavg"])
@@ -282,7 +281,7 @@ sns.barplot(avg, ax=ax, y="wavg", x="ismember", edgecolor="w", color=colors[0])
 
 ax.set_title("Število obiskov glede na članstvo")
 ax.set_xticks(ticks=ax.get_xticks(), labels=ax.get_xticklabels(), rotation=25, ha='right')
-ax.set_ylabel("ševilo obiskov\n(uteženo povprečje)")
+ax.set_ylabel("število obiskov\n(uteženo povprečje)")
 ax.set_xlabel("članstvo")
 
 for i, v in enumerate(avg.wavg.tolist()):
