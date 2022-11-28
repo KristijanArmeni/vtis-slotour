@@ -154,109 +154,141 @@ sns.despine()
 
 st.pyplot(fig=fig)
 
-# ===== ŠTEVILO PROMOCIJ ===== #
-st.markdown("## Kako in koliko člani društva VTIS promovirajo Slovenijo?")
+# ===== STEVILO OBISKOV GLEDE NA DRZAVO BIVANJA
+st.markdown("## Število obiskov glede na državo bivanja, čas bivanja v tujini in članstvo")
 
-st.markdown("### Število priporočil")
 
-groups = ["ismember", "n_rec"]
-ismember_count = df.groupby("ismember")["n_rec"].transform("sum")
-dat_count = df.groupby(groups).agg({"n_rec": "count"})
-dat_total = df.groupby("ismember").agg({"n_rec": "count"})
-dat_count['perc'] = (dat_count.div(dat_total, level="ismember")*100).round(decimals=0).astype(int)
-dat_count['text'] = dat_count.perc.apply(lambda x: f"{x}%") + dat_count.n_rec.apply(lambda x: f"\n({x})")
+# extract countries, number of visits and years abroad
+countries = [e.split(", ") for e in df.countries.to_numpy()]
+subs = [f"s{i+1:03}" for i in range(len(df))]
+visits = df.n_incoming.to_list()
+tabroad = df.years_abroad.to_list()
+ismember = df.ismember.to_list()
 
-fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(6.5, 4.5))
-shrinkage = 0.9
-ax = sns.histplot(df,
-                  ax=ax,
-                  x='n_rec',
-                  hue='ismember',
-                  discrete=True,
-                  multiple='dodge',
-                  binwidth=1,
-                  shrink=shrinkage,
-                  common_norm=False,
-                  legend=True,
-                  stat='percent',
-                  edgecolor='w',
-                  label="Test")
+# create data frame
+dat = None
+dat = pd.DataFrame(countries, columns=[f"{i+1}" for i in range(max([len(e) for e in countries]))])
+dat["years_abroad"] = tabroad
+dat["n_incoming"] = visits
+dat["ismember"] = ismember
+dat["sub"] = subs
 
-ax.set(ylabel="% odgovorov", xlabel="št. ljudi")
-ax.set_title(label="Koliko ljudem ste v zadnjih 12 mesecih predlagali potovanje v Slovenijo?",
-             ha="center",
-             fontsize=14)
-ax.set_xticks(ticks=list(value_map1.values()), labels=value_map1.keys())
-ax.set_ylim([0, 100])
+# conver to long format
+datlong = pd.melt(dat, id_vars=["sub", "years_abroad", "n_incoming", "ismember"], value_vars=[f"{i+1}" for i in range(8)], value_name="country", var_name="country_id")
 
-xloc = np.tile(ax.get_xticks(), 2).astype(float)
-xloc[0:5] = xloc[0:5] + shrinkage/4
-xloc[5::] = xloc[5::] - shrinkage/4
+# now count the countries so we can filter by responses
+tmp = datlong.groupby("country", as_index=False).size()
+counts = {c: cnt for c, cnt in zip(tmp.country.tolist(), tmp["size"].tolist())}
 
-for i, v in enumerate(dat_count.text.tolist()):
-    ax.text(x=xloc[i], y=dat_count.perc[i]+2, s=v, ha="center")
+datlong["n_samples"] = [int(counts[c]) if c is not None else None for c in datlong.country.tolist()]
 
-ax.annotate(text=f"N = {len(df)}", xy=[ax.get_xlim()[0]*-0.01, 90], fontsize=12)
-sns.move_legend(ax, loc='upper right', title="")
-plt.tight_layout()
+# funtcion to compute weights for estimated percentages
+def get_weigths_values(dfin, iv):
+
+    threshold = 15
+    dftmp = dfin.loc[dfin.n_samples > threshold].sort_values(by="n_samples").groupby([iv, "n_incoming"], as_index=False).size()
+
+    counts = None
+    counts = dftmp.groupby(iv).agg({"size": "sum"})
+    dftmp["total"] = np.nan
+
+    for c, n in zip(counts.index.to_numpy(), counts["size"].to_numpy()):
+        dftmp.loc[dftmp[iv]==c, "total"] = n
+
+    dftmp["total"] = dftmp.total.astype(int)
+    dftmp["weight"] = (dftmp["size"] / dftmp.total).round(decimals=2)
+    dftmp["perc"] = dftmp.weight*100
+
+    # set estimates for number of visits
+    values = {0: 0, 1: 5, 2: 20, 3: 40, 4: 75, 5: 150, 6: 220}
+    dftmp["estimates"] = dftmp.n_incoming.replace(values.keys(), values.values())
+    dftmp.head(5)
+
+    return dftmp
+
+# create a function that takes a dataframe grouped by a variable 
+# and computes a weighted average of a variable
+def weighted_average(df, value, weight):
+
+    return (df[value] * df[weight]).sum() / df[weight].sum()
+
+tmp2 = get_weigths_values(datlong, iv="country")
+
+avg = pd.DataFrame(tmp2.groupby("country").apply(weighted_average, "estimates", "weight"), columns=["wavg"])
+avg["country"] = avg.index
+avg.wavg = avg.wavg.round(decimals=1)
+avg = avg.sort_values(by="wavg", ascending=False)
+
+st.markdown("Za spodnjo vizualizacijo smo prešteli zastopane države pri odgovorih in nato za vsako "+\
+           "izračunali uteženo povprečje glede na pogostost posamičnega odgovora. " +\
+            "V izračun smo zajeli le države, za katere je vzorec zajemal vsaj 15 odgovorov.")
+
+values = {0: 0, 1: 5, 2: 20, 3: 40, 4: 75, 5: 150, 6: 220}
+st.markdown("Možni odgovori so bili: "+" ".join([f"{key} let; " for i, key in enumerate(value_map2.keys())]))
+st.markdown("Za posamične odgovore smo uporabili sledeče srednje vrednosti: "+ " ".join([f"{v} let; " for v in values.values()]))
+
+# ===== FIGURE
+fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(6, 3.5))
+
+sns.barplot(avg, ax=ax, y="wavg", x="country", edgecolor="w", color=colors[0])
+
+ax.set_title("Število obiskov glede na državo bivanja")
+ax.set_xticks(ticks=ax.get_xticks(), labels=ax.get_xticklabels(), rotation=35, ha='right')
+ax.set_ylabel("ševilo obiskov\n(uteženo povprečje)")
+ax.set_xlabel("država/regija")
+
+for i, v in enumerate(avg.wavg.tolist()):
+    ax.text(x=i, y=avg.wavg[i]-1.5, s=v, ha="center", color="w")
+
 sns.despine()
 
 st.pyplot(fig=fig)
 
-# ===== 
-st.markdown("### Število obiskov")
+st.markdown("### Število obiskov glede na čas bivanja")
 
-# format percents texts for plotting on top of histograms
-groups = ["ismember", "n_incoming"]
-dv = "n_incoming"
-dat_count = df.groupby(groups).agg({dv: "count"})
+tmp3 = get_weigths_values(datlong, iv="years_abroad")
 
-# add categories that have not occured just for plotting
-dat_count.loc[('Nisem član/-ica', 3), "n_incoming"] = 0
-dat_count.loc[('Nisem član/-ica', 5), "n_incoming"] = 0
-dat_count.n_incoming = dat_count.n_incoming.astype(int)
-dat_count = dat_count.sort_index()
+avg = pd.DataFrame(tmp3.groupby("years_abroad").apply(weighted_average, "estimates", "weight"), columns=["wavg"])
+avg["years_abroad"] = avg.index
+avg.wavg = avg.wavg.round(decimals=1)
+avg.head(5)
 
-# compute counts and format percentages
-dat_total = df.groupby("ismember").agg({dv: "count"})
-dat_count['perc'] = (dat_count.div(dat_total, level="ismember")*100).round(decimals=0).astype(int)
-dat_count['text'] = dat_count.perc.apply(lambda x: f"{x}%") + dat_count[dv].apply(lambda x: f"\n({x})")
+fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(6, 3.5))
 
-# FIGURE
-fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(6.5, 4.5))
+sns.barplot(avg, ax=ax, y="wavg", x="years_abroad", edgecolor="w", color=colors[0])
 
-sns.histplot(df, 
-             ax=ax,
-             x='n_incoming',
-             hue='ismember',
-             discrete=True,
-             multiple='dodge',
-             shrink=0.9,
-             common_norm=False,
-             legend=True,
-             stat='percent',
-             edgecolor='w')
+ax.set_title("Število obiskov glede čas bivanja v tujini")
+ax.set_xticks(ticks=ax.get_xticks(), labels=years_abroad_map.keys(), rotation=0, ha='center')
+ax.set_ylabel("ševilo obiskov\n(uteženo povprečje)")
+ax.set_xlabel("čas bivanja v tujini")
 
-ax.set(ylabel="% odgovorov",
-       xlabel="št. ljudi")
-ax.set_title(label="Približno koliko ljudi je Slovenijo obiskalo zaradi vašega predloga,\nodkar ste prvič odšli v tujino?",
-             fontsize=14)
-ax.set_xticks(ticks=list(value_map2.values()), labels=value_map2.keys())
-ax.set_ylim([0, 100])
+for i, v in enumerate(avg.wavg.tolist()):
+    ax.text(x=i, y=avg.wavg[i]-2.3, s=v, ha="center", color="w", fontsize=12)
 
-# set x-axis positions for text annotations
-xloc = dat_count.index.get_level_values("n_incoming").to_numpy().astype(float)
-half=len(dat_count)//2
-xloc[0:half] = xloc[0:half] + shrinkage/4
-xloc[half::] = xloc[half::] - shrinkage/4
-
-for i, v in enumerate(dat_count.text.tolist()):
-    ax.text(x=xloc[i], y=dat_count.perc[i]+2, s=v, ha="center")
-
-ax.annotate(text=f"N = {len(df)}", xy=[ax.get_xlim()[0]*-0.01, 90], fontsize=12)
-sns.move_legend(ax, loc='upper right', title="")
 sns.despine()
+st.pyplot(fig=fig)
 
+st.markdown("### Število obiskov glede na članstvo")
+
+tmp4 = get_weigths_values(datlong, iv="ismember")
+avg = pd.DataFrame(tmp4.groupby("ismember").apply(weighted_average, "estimates", "weight"), columns=["wavg"])
+avg["ismember"] = avg.index
+avg.wavg = avg.wavg.round(decimals=1)
+
+# ===== FIGURE
+fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(2, 3.5))
+
+sns.barplot(avg, ax=ax, y="wavg", x="ismember", edgecolor="w", color=colors[0])
+
+ax.set_title("Število obiskov glede na članstvo")
+ax.set_xticks(ticks=ax.get_xticks(), labels=ax.get_xticklabels(), rotation=25, ha='right')
+ax.set_ylabel("ševilo obiskov\n(uteženo povprečje)")
+ax.set_xlabel("članstvo")
+
+for i, v in enumerate(avg.wavg.tolist()):
+    ax.text(x=i, y=avg.wavg[i]-3, s=v, ha="center", color="w", fontsize=14)
+
+sns.despine()
 st.pyplot(fig=fig)
 
 # ===== NAJBOLJ PROMOVIRANE REGIJE ===== #
