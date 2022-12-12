@@ -311,11 +311,11 @@ n_final = sum(count_vtis)/n_vtis
 
 st.markdown(f"V raziskavi je sodelovalo N = {n_vtis} članov društva VTIS. " +
             f"Skupno je na podlagi njihovih priporočil Slovenijo obiskalo {sum(count_vtis)} ljudi. " +
-            f"Na enega vtisovca Slovenijo torej obišče približno **{int(round(n_final, 0))}** ljudi. ")
+            f"Na enega vtisovca Slovenijo torej po naši oceni obišče približno **{int(round(n_final, 0))}** ljudi. ")
 
 values = {0: 0, 1: 5, 2: 20, 3: 40, 4: 75, 5: 150, 6: 220}
-st.markdown("(Možni odgovori (št. obiskov) so bili: "+" ".join([f"{key}; " for i, key in enumerate(value_map2.keys())]) +
-            " Za posamične odgovore smo uporabili sledeče srednje vrednosti: "+ " ".join([f"{v}; " for v in values.values()]) + ")")
+st.markdown("(Opomba: Možni odgovori (št. obiskov) so bili: "+" ".join([f"{key}; " for i, key in enumerate(value_map2.keys())]) +
+            " Da bi ocenili število obiskov za posameznega udeleženca, smo predpostavljali sledeče srednje vrednosti: "+ " ".join([f"{v}; " for v in values.values()]) + ")")
 
 
 
