@@ -100,31 +100,39 @@ st.pyplot(fig=fig)
 # ===== DRŽAVA BIVANJA ===== #
 st.markdown("## Država bivanja")
 
-a = [e.split(", ") for e in df.countries.to_numpy()]
+countries = [e.split(", ") for e in df.countries.to_numpy()]
+
+def fix_country_typos(input_list):
+
+    scandinavia = ["Norveska", "Norveška", "Svedska", "Švedska", "Danska"]
+    typos = {
+        "Grcija": "Grčija", 
+        "Cile": "Čile", 
+        "Urugay": "Urugvaj",
+        "argentina": "Argentina",
+        "srbija": "Srbija",
+        "Nova zelandija": "Nova Zelandija",
+            }
+
+    output_list = []
+    for e in input_list:
+        e = e.strip()
+        if e in typos.keys():
+            e = typos[e]
+        elif e in scandinavia:
+            e = "Skandinavija"
+        output_list.append(e)
+
+    return output_list
+
+countries_fixed = list(map(fix_country_typos, countries))
+
+# conver to list with a single item
 x = []
-for e in a:
+for e in countries_fixed:
     x += e
 
-scandinavia = ["Norveska", "Norveška", "Svedska", "Švedska", "Danska"]
-typos = {
-    "Grcija": "Grčija", 
-    "Cile": "Čile", 
-    "Urugay": "Urugvaj",
-    "argentina": "Argentina",
-    "srbija": "Srbija",
-    "Nova zelandija": "Nova Zelandija",
-        }
-
-d = []
-for e in x:
-    e = e.strip()
-    if e in typos.keys():
-        e = typos[e]
-    elif e in scandinavia:
-        e = "Skandinavija"
-    d.append(e)
-
-df2 = pd.DataFrame(d, columns=["countries"]).groupby('countries').size().sort_values(ascending=False)
+df2 = pd.DataFrame(x, columns=["countries"]).groupby('countries').size().sort_values(ascending=False)
 df2 = pd.DataFrame(df2, columns=["count"])
 
 # count those with count <2
@@ -154,12 +162,11 @@ sns.despine()
 
 st.pyplot(fig=fig)
 
+st.markdown("## Povprečno število priporočil (člani vs nečlani)")
+
 # ===== STEVILO OBISKOV GLEDE NA DRZAVO BIVANJA
 st.markdown("## Število obiskov glede na državo bivanja, čas bivanja v tujini in članstvo")
 
-
-# extract countries, number of visits and years abroad
-countries = [e.split(", ") for e in df.countries.to_numpy()]
 subs = [f"s{i+1:03}" for i in range(len(df))]
 visits = df.n_incoming.to_list()
 tabroad = df.years_abroad.to_list()
@@ -167,14 +174,15 @@ ismember = df.ismember.to_list()
 
 # create data frame
 dat = None
-dat = pd.DataFrame(countries, columns=[f"{i+1}" for i in range(max([len(e) for e in countries]))])
+dat = pd.DataFrame(countries_fixed, columns=[f"{i+1}" for i in range(max([len(e) for e in countries]))])
 dat["years_abroad"] = tabroad
 dat["n_incoming"] = visits
+dat["n_rec"] = df.n_rec.tolist()
 dat["ismember"] = ismember
 dat["sub"] = subs
 
 # conver to long format
-datlong = pd.melt(dat, id_vars=["sub", "years_abroad", "n_incoming", "ismember"], value_vars=[f"{i+1}" for i in range(8)], value_name="country", var_name="country_id")
+datlong = pd.melt(dat, id_vars=["sub", "years_abroad", "n_incoming", "n_rec", "ismember"], value_vars=[f"{i+1}" for i in range(8)], value_name="country", var_name="country_id")
 
 # now count the countries so we can filter by responses
 tmp = datlong.groupby("country", as_index=False).size()
@@ -183,10 +191,10 @@ counts = {c: cnt for c, cnt in zip(tmp.country.tolist(), tmp["size"].tolist())}
 datlong["n_samples"] = [int(counts[c]) if c is not None else None for c in datlong.country.tolist()]
 
 # funtcion to compute weights for estimated percentages
-def get_weigths_values(dfin, iv):
+def get_weigths_values(dfin, iv, dv, dv_values):
 
     threshold = 15
-    dftmp = dfin.loc[dfin.n_samples > threshold].sort_values(by="n_samples").groupby([iv, "n_incoming"], as_index=False).size()
+    dftmp = dfin.loc[dfin.n_samples > threshold].sort_values(by="n_samples").groupby([iv, dv], as_index=False).size()
 
     counts = None
     counts = dftmp.groupby(iv).agg({"size": "sum"})
@@ -200,8 +208,7 @@ def get_weigths_values(dfin, iv):
     dftmp["perc"] = dftmp.weight*100
 
     # set estimates for number of visits
-    values = {0: 0, 1: 5, 2: 20, 3: 40, 4: 75, 5: 150, 6: 220}
-    dftmp["estimates"] = dftmp.n_incoming.replace(values.keys(), values.values())
+    dftmp["estimates"] = dftmp[dv].replace(dv_values.keys(), dv_values.values())
     dftmp.head(5)
 
     return dftmp
@@ -212,7 +219,8 @@ def weighted_average(df, value, weight):
 
     return (df[value] * df[weight]).sum() / df[weight].sum()
 
-tmp2 = get_weigths_values(datlong, iv="country")
+values = {0: 0, 1: 5, 2: 20, 3: 40, 4: 75, 5: 150, 6: 220}
+tmp2 = get_weigths_values(datlong, iv="country", dv="n_incoming", dv_values=values)
 
 avg = pd.DataFrame(tmp2.groupby("country").apply(weighted_average, "estimates", "weight"), columns=["wavg"])
 avg["country"] = avg.index
@@ -224,8 +232,8 @@ st.markdown("Za spodnjo vizualizacijo smo prešteli zastopane države pri odgovo
             "V izračun smo zajeli le države, za katere je vzorec zajemal vsaj 15 odgovorov.")
 
 values = {0: 0, 1: 5, 2: 20, 3: 40, 4: 75, 5: 150, 6: 220}
-st.markdown("Možni odgovori so bili: "+" ".join([f"{key} let; " for i, key in enumerate(value_map2.keys())]))
-st.markdown("Za posamične odgovore smo uporabili sledeče srednje vrednosti: "+ " ".join([f"{v} let; " for v in values.values()]))
+st.markdown("Možni odgovori (št. obiskov) so bili: "+" ".join([f"{key}; " for i, key in enumerate(value_map2.keys())]))
+st.markdown("Za posamične odgovore smo uporabili sledeče srednje vrednosti: "+ " ".join([f"{v}; " for v in values.values()]))
 
 # ===== FIGURE
 fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(6, 3.5))
@@ -245,8 +253,8 @@ sns.despine()
 st.pyplot(fig=fig)
 
 # ===== GLEDE NA CAS BIVANJA V TUJINI
-
-tmp3 = get_weigths_values(datlong, iv="years_abroad")
+values = {0: 0, 1: 5, 2: 20, 3: 40, 4: 75, 5: 150, 6: 220}
+tmp3 = get_weigths_values(datlong, iv="years_abroad", dv="n_incoming", dv_values=values)
 
 avg = pd.DataFrame(tmp3.groupby("years_abroad").apply(weighted_average, "estimates", "weight"), columns=["wavg"])
 avg["years_abroad"] = avg.index
@@ -268,8 +276,9 @@ for i, v in enumerate(avg.wavg.tolist()):
 sns.despine()
 st.pyplot(fig=fig)
 
-
-tmp4 = get_weigths_values(datlong, iv="ismember")
+# ==== ŠTEVILO OBISKOV GLEDE NA ČLANSTVO
+values = {0: 0, 1: 5, 2: 20, 3: 40, 4: 75, 5: 150, 6: 220}
+tmp4 = get_weigths_values(datlong, iv="ismember", dv="n_incoming", dv_values=values)
 avg = pd.DataFrame(tmp4.groupby("ismember").apply(weighted_average, "estimates", "weight"), columns=["wavg"])
 avg["ismember"] = avg.index
 avg.wavg = avg.wavg.round(decimals=1)
@@ -288,6 +297,56 @@ for i, v in enumerate(avg.wavg.tolist()):
     ax.text(x=i, y=avg.wavg[i]-3, s=v, ha="center", color="w", fontsize=14)
 
 sns.despine()
+st.pyplot(fig=fig)
+
+st.markdown("## Število obiskov na enega VTISovca")
+
+values = {0: 0, 1: 5, 2: 20, 3: 40, 4: 75, 5: 150, 6: 220}
+count = df.n_incoming.replace(values.keys(), values.values()).to_numpy()
+count_vtis = count[(df.ismember == "Član/-ica").to_numpy()]
+
+n_vtis = (df.ismember == "Član/-ica").sum()
+
+n_final = sum(count_vtis)/n_vtis
+
+st.markdown(f"V raziskavi je sodelovalo N = {n_vtis} članov društva VTIS. " +
+            f"Skupno je na podlagi njihovih priporočil Slovenijo obiskalo {sum(count_vtis)} ljudi. " +
+            f"Na enega vtisovca Slovenijo torej obišče približno **{int(round(n_final, 0))}** ljudi. ")
+
+values = {0: 0, 1: 5, 2: 20, 3: 40, 4: 75, 5: 150, 6: 220}
+st.markdown("(Možni odgovori (št. obiskov) so bili: "+" ".join([f"{key}; " for i, key in enumerate(value_map2.keys())]) +
+            " Za posamične odgovore smo uporabili sledeče srednje vrednosti: "+ " ".join([f"{v}; " for v in values.values()]) + ")")
+
+
+
+# ===== ŠTEVILO PRIPOROČIL ===== #
+
+st.markdown("## Število priporočil (član vs. nečlan)")
+
+values = {0: 0, 1: 2.5, 2: 10, 3: 22.5, 4: 40}
+tmp5 = get_weigths_values(datlong, iv="ismember", dv="n_rec", dv_values=values)
+
+avg = pd.DataFrame(tmp5.groupby("ismember").apply(weighted_average, "estimates", "weight"), columns=["wavg"])
+avg["ismember"] = avg.index
+avg.wavg = avg.wavg.round(decimals=1)
+avg.head(5)
+
+# ==== FIGURE ===== #
+
+fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(2, 3.5))
+
+sns.barplot(avg, ax=ax, y="wavg", x="ismember", edgecolor="w", color=colors[0])
+
+ax.set_title("Število priporočil glede na članstvo")
+ax.set_xticks(ticks=ax.get_xticks(), labels=ax.get_xticklabels(), rotation=25, ha='right')
+ax.set_ylabel("ševilo priporočil\n(uteženo povprečje)")
+ax.set_xlabel("članstvo")
+
+for i, v in enumerate(avg.wavg.tolist()):
+    ax.text(x=i, y=avg.wavg[i]-1, s=v, ha="center", color="w", fontsize=14)
+
+sns.despine()
+
 st.pyplot(fig=fig)
 
 # ===== NAJBOLJ PROMOVIRANE REGIJE ===== #
