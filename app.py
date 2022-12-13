@@ -193,8 +193,11 @@ datlong["n_samples"] = [int(counts[c]) if c is not None else None for c in datlo
 # funtcion to compute weights for estimated percentages
 def get_weigths_values(dfin, iv, dv, dv_values):
 
-    threshold = 15
-    dftmp = dfin.loc[dfin.n_samples > threshold].sort_values(by="n_samples").groupby([iv, dv], as_index=False).size()
+    if iv == "country":
+        threshold = 15
+        dftmp = dfin.loc[dfin.n_samples > threshold].sort_values(by="n_samples").groupby([iv, dv], as_index=False).size()
+    else:
+        dftmp = dfin.groupby([iv, dv], as_index=False).size()
 
     counts = None
     counts = dftmp.groupby(iv).agg({"size": "sum"})
@@ -202,6 +205,9 @@ def get_weigths_values(dfin, iv, dv, dv_values):
 
     for c, n in zip(counts.index.to_numpy(), counts["size"].to_numpy()):
         dftmp.loc[dftmp[iv]==c, "total"] = n
+
+    #print(f"Group: {counts.index.to_numpy()}")
+    #print(f"Group counts: {counts['size'].to_numpy()}")
 
     dftmp["total"] = dftmp.total.astype(int)
     dftmp["weight"] = (dftmp["size"] / dftmp.total).round(decimals=2)
@@ -254,7 +260,7 @@ st.pyplot(fig=fig)
 
 # ===== GLEDE NA CAS BIVANJA V TUJINI
 values = {0: 0, 1: 5, 2: 20, 3: 40, 4: 75, 5: 150, 6: 220}
-tmp3 = get_weigths_values(datlong, iv="years_abroad", dv="n_incoming", dv_values=values)
+tmp3 = get_weigths_values(df, iv="years_abroad", dv="n_incoming", dv_values=values)
 
 avg = pd.DataFrame(tmp3.groupby("years_abroad").apply(weighted_average, "estimates", "weight"), columns=["wavg"])
 avg["years_abroad"] = avg.index
@@ -271,14 +277,14 @@ ax.set_ylabel("število obiskov\n(uteženo povprečje)")
 ax.set_xlabel("čas bivanja v tujini")
 
 for i, v in enumerate(avg.wavg.tolist()):
-    ax.text(x=i, y=avg.wavg[i]-2.3, s=v, ha="center", color="w", fontsize=12)
+    ax.text(x=i, y=avg.wavg[i]-2, s=v, ha="center", color="w", fontsize=14)
 
 sns.despine()
 st.pyplot(fig=fig)
 
 # ==== ŠTEVILO OBISKOV GLEDE NA ČLANSTVO
 values = {0: 0, 1: 5, 2: 20, 3: 40, 4: 75, 5: 150, 6: 220}
-tmp4 = get_weigths_values(datlong, iv="ismember", dv="n_incoming", dv_values=values)
+tmp4 = get_weigths_values(df, iv="ismember", dv="n_incoming", dv_values=values)
 avg = pd.DataFrame(tmp4.groupby("ismember").apply(weighted_average, "estimates", "weight"), columns=["wavg"])
 avg["ismember"] = avg.index
 avg.wavg = avg.wavg.round(decimals=1)
@@ -294,10 +300,21 @@ ax.set_ylabel("število obiskov\n(uteženo povprečje)")
 ax.set_xlabel("članstvo")
 
 for i, v in enumerate(avg.wavg.tolist()):
-    ax.text(x=i, y=avg.wavg[i]-3, s=v, ha="center", color="w", fontsize=14)
+    ax.text(x=i, y=avg.wavg[i]-1.5, s=v, ha="center", color="w", fontsize=14)
 
 sns.despine()
 st.pyplot(fig=fig)
+
+# ===== NE GLEDE NA ČLANSTVO ===== #
+
+values = {0: 0, 1: 5, 2: 20, 3: 40, 4: 75, 5: 150, 6: 220}
+tmp6 = df.groupby(["n_incoming"], as_index=False).size()
+tmp6["total"] = tmp6["size"].sum()
+tmp6["weight"] = round(tmp6["size"]/tmp6.total, 3)
+tmp6["estimates"] = tmp6.n_incoming.replace(values.keys(), values.values())
+n_rec_total = round((tmp6["weight"]*tmp6.estimates).sum()/tmp6.weight.sum(), 0)
+
+st.markdown(f"Skupno uteženo povprečje za število obiskov (neglede na članstvo) znaša **{int(n_rec_total)}** ljudi.")
 
 st.markdown("## Število obiskov na enega VTISovca")
 
@@ -311,26 +328,25 @@ n_final = sum(count_vtis)/n_vtis
 
 st.markdown(f"V raziskavi je sodelovalo N = {n_vtis} članov društva VTIS. " +
             f"Skupno je na podlagi njihovih priporočil Slovenijo obiskalo {sum(count_vtis)} ljudi. " +
-            f"Na enega vtisovca Slovenijo torej po naši oceni obišče približno **{int(round(n_final, 0))}** ljudi. ")
+            f"Na enega vtisovca Slovenijo torej po naši oceni obišče približno **{int(round(n_final, 0))}** ljudi. " + 
+            f"Če upoštevamo vse udeležence raziskave, tudi nečlane, je zaradi enega Slovenca/ke v tujini Slovenijo obiskalo **{int(round(sum(count)/len(df), 0))}** ljudi. " )
 
 values = {0: 0, 1: 5, 2: 20, 3: 40, 4: 75, 5: 150, 6: 220}
-st.markdown("(Opomba: Možni odgovori (št. obiskov) so bili: "+" ".join([f"{key}; " for i, key in enumerate(value_map2.keys())]) +
+st.markdown("(Opomba: Možni odgovori (št. obiskov) so bili podani v sledečih intervalih: "+" ".join([f"{key}; " for i, key in enumerate(value_map2.keys())]) +
             " Da bi ocenili število obiskov za posameznega udeleženca, smo predpostavljali sledeče srednje vrednosti: "+ " ".join([f"{v}; " for v in values.values()]) + ")")
-
-
 
 # ===== ŠTEVILO PRIPOROČIL ===== #
 
 st.markdown("## Število priporočil (član vs. nečlan)")
 
 values = {0: 0, 1: 2.5, 2: 10, 3: 22.5, 4: 40}
-tmp5 = get_weigths_values(datlong, iv="ismember", dv="n_rec", dv_values=values)
+tmp5 = get_weigths_values(df, iv="ismember", dv="n_rec", dv_values=values)
 
 avg = pd.DataFrame(tmp5.groupby("ismember").apply(weighted_average, "estimates", "weight"), columns=["wavg"])
 avg["ismember"] = avg.index
 avg.wavg = avg.wavg.round(decimals=1)
 avg.head(5)
-
+tmp5
 # ==== FIGURE ===== #
 
 fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(2, 3.5))
