@@ -329,7 +329,7 @@ n_final = sum(count_vtis)/n_vtis
 st.markdown(f"V raziskavi je sodelovalo N = {n_vtis} članov društva VTIS. " +
             f"Skupno je na podlagi njihovih priporočil Slovenijo obiskalo {sum(count_vtis)} ljudi. " +
             f"Na enega vtisovca Slovenijo torej po naši oceni obišče približno **{int(round(n_final, 0))}** ljudi. " + 
-            f"Če upoštevamo vse udeležence raziskave, tudi nečlane, je zaradi enega Slovenca/ke v tujini Slovenijo obiskalo **{int(round(sum(count)/len(df), 0))}** ljudi. " )
+            f"Če upoštevamo **vse udeležence raziskave**, tudi nečlane, je zaradi enega Slovenca/ke v tujini Slovenijo obiskalo **{int(round(sum(count)/len(df), 0))}** ljudi. " )
 
 values = {0: 0, 1: 5, 2: 20, 3: 40, 4: 75, 5: 150, 6: 220}
 st.markdown("(Opomba: Možni odgovori (št. obiskov) so bili podani v sledečih intervalih: "+" ".join([f"{key}; " for i, key in enumerate(value_map2.keys())]) +
